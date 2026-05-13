@@ -214,7 +214,9 @@ const CATALOG = [
     sku: "BWN-WAL-001", category: "WALLS", categoryDisplay: "Wall System",
     title: "CleanSpace™ Wall Vapor Barrier",
     description: "Supply and install CleanSpace™ 20-mil reinforced polyethylene vapor barrier on basement walls. Anti-microbial protection bonded into film. Lifetime Warranty against tearing and microbial growth under normal conditions.",
-    uom: "SF", unitPrice: 9.5, warrantyType: "Lifetime", isFreeText: false, version: CATALOG_VERSION, icon: Layers, accent: T.tileGreen, accentInk: T.tileGreenInk,
+    // UOM per client catalog confirmation (2026-05-13): LF. Standalone unit
+    // price still TBC from client; placeholder retained for prototype math.
+    uom: "LF", unitPrice: 9.5, warrantyType: "Lifetime", isFreeText: false, version: CATALOG_VERSION, icon: Layers, accent: T.tileGreen, accentInk: T.tileGreenInk,
   },
   {
     sku: "BWN-WAL-002", category: "WALLS", categoryDisplay: "Wall System",
@@ -261,51 +263,30 @@ const CATALOG = [
 ];
 
 // ============================================================================
-// PACKAGES (BWN-21) — pre-built bundles of catalog SKUs with default quantities.
-// One-tap insert for the most common job patterns from the BWN Pricing Guide.
+// PACKAGES (BWN-21) — pre-built bundles of catalog SKUs.
+// Per client catalog (2026-05-13): only the Standard Waterproofing Pkg exists.
+// One item — the Interior Below-Floor Drainage System — drives the price at
+// $125 / LF (the rep enters the LF). Every other item in the package is
+// "Included at $0" (bundled: true → customPrice forced to 0 when added).
 // ============================================================================
 const PACKAGES = [
   {
     key: "PKG-STD-WP",
     title: "Standard Waterproofing Pkg",
-    description: "Full-perimeter interior drainage + sump system + vapor barrier — the most common BWN job.",
+    description: "Full-perimeter interior drainage + sump system + vapor barrier — bundled at $0; only the drainage system's LF drives the contract price.",
     icon: Droplets,
     accent: T.tileBlue,
     accentInk: T.tileBlueInk,
     items: [
-      { sku: "BWN-FLR-001", qty: 60 },
-      { sku: "BWN-SMP-001", qty: 1 },
-      { sku: "BWN-LNR-001", qty: 1 },
-      { sku: "BWN-DIS-002", qty: 1 },
-      { sku: "BWN-WAL-002", qty: 60 },
-      { sku: "BWN-WAL-001", qty: 480 },
-      { sku: "BWN-DRN-002", qty: 1 },
-    ],
-  },
-  {
-    key: "PKG-SUMP-REPL",
-    title: "Sump Replacement Pkg",
-    description: "Drop-in sump pump + liner + discharge — for failing or aging existing sumps.",
-    icon: Wrench,
-    accent: T.tilePurple,
-    accentInk: T.tilePurpleInk,
-    items: [
-      { sku: "BWN-SMP-002", qty: 1 },
-      { sku: "BWN-LNR-002", qty: 1 },
-      { sku: "BWN-DIS-001", qty: 24 },
-    ],
-  },
-  {
-    key: "PKG-BATTERY-BACKUP",
-    title: "Battery Backup Pkg",
-    description: "Battery pump + battery + discharge — for power-outage protection on existing system.",
-    icon: Wrench,
-    accent: T.tileOrange,
-    accentInk: T.tileOrangeInk,
-    items: [
-      { sku: "BWN-BAT-001", qty: 1 },
-      { sku: "BWN-BAT-002", qty: 1 },
-      { sku: "BWN-DIS-002", qty: 1 },
+      // Anchor: priced at $125/LF; rep enters actual LF after the package is added.
+      { sku: "BWN-FLR-001", qty: 1, bundled: false },
+      // Satellites: included at $0; qty cosmetic (rep can leave at 1 or adjust).
+      { sku: "BWN-SMP-001", qty: 1, bundled: true },
+      { sku: "BWN-LNR-001", qty: 1, bundled: true },
+      { sku: "BWN-DIS-002", qty: 1, bundled: true },
+      { sku: "BWN-WAL-002", qty: 1, bundled: true },
+      { sku: "BWN-WAL-001", qty: 1, bundled: true },
+      { sku: "BWN-DRN-002", qty: 1, bundled: true },
     ],
   },
 ];
@@ -1800,8 +1781,8 @@ const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, o
                             {isExpanded ? "View less" : "View more"}
                           </span>
                         )}
-                        {/* Inline qty stepper */}
-                        <div className="mt-2 inline-flex items-center">
+                        {/* Inline qty stepper + (optional) bundled-included pill */}
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
                           <div
                             className="inline-flex items-center rounded-lg overflow-hidden"
                             style={{ background: T.surface, border: `1px solid ${T.border}` }}
@@ -1833,6 +1814,14 @@ const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, o
                               +
                             </span>
                           </div>
+                          {it.bundledFromPackage && (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                              style={{ background: T.successSoft, color: T.success }}
+                            >
+                              <Package size={10} /> Included · $0
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2299,26 +2288,35 @@ const LineItemPicker = ({ open, onClose, onAdd, onAddPackage, onSaveEdit, editIt
                           <p className="text-xs font-semibold leading-tight" style={{ color: T.text }}>{sku.title}</p>
                           <p className="text-[10px]" style={{ color: T.textSecondary }}>{sku.categoryDisplay}</p>
                         </div>
-                        <span className="text-[11px] font-bold tabular-nums" style={{ color: T.purpleAccent }}>
-                          {pi.qty} {sku.uom}
-                        </span>
+                        {pi.bundled ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0" style={{ background: T.successSoft, color: T.success }}>
+                            Included · $0
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0" style={{ background: T.purpleSoft, color: T.purpleAccent }}>
+                            {fmt$(sku.unitPrice)} / {sku.uom}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-md" style={{ background: T.infoSoft, border: `1px dashed ${T.info}55` }}>
+                  <p className="text-[11px] font-semibold" style={{ color: T.info }}>
+                    <Info size={11} className="inline mr-1" />
+                    Price is driven by the drainage system's LF. Set its quantity on the Quote Detail screen after adding the package.
+                  </p>
                 </div>
                 <button
                   onClick={() => {
                     onAddPackage && onAddPackage(selectedPackage);
                     onClose();
                   }}
-                  className="w-full mt-4 py-3 rounded-lg text-sm font-semibold active:scale-95"
+                  className="w-full mt-3 py-3 rounded-lg text-sm font-semibold active:scale-95"
                   style={{ background: T.purple, color: "#fff" }}
                 >
                   Add all {selectedPackage.items.length} items
                 </button>
-                <p className="text-[10px] text-center mt-2" style={{ color: T.textTertiary }}>
-                  You can adjust quantities or remove items afterwards.
-                </p>
               </div>
             )}
 
@@ -4360,6 +4358,10 @@ export default function App() {
       sku: pi.sku,
       qty: pi.qty,
       customDescription: null,
+      // Bundled items ride along at $0 — they contribute nothing to the total
+      // regardless of qty. Anchor items keep their catalog unitPrice.
+      customPrice: pi.bundled ? 0 : null,
+      bundledFromPackage: pi.bundled ? pkg.title : null,
     }));
     setEstimate((e) => ({ ...e, lineItems: [...e.lineItems, ...newItems] }));
     setShowLineItem(false);
