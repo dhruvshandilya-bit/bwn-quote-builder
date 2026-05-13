@@ -1527,7 +1527,7 @@ const CreateQuoteModal = ({ open, onClose, onCreate, onOpenStory, orgConfig }) =
 // ============================================================================
 // 4. QUOTE DETAIL SCREEN — Contract Terms + sections of line items (BWN-22)
 // ============================================================================
-const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, onUpdateLineItem, onRemoveLineItem, onOpenMenus, onOpenBasement, onOpenNotes, onOpenGenerate, onOpenStory, onReissue, onPatchEstimate }) => {
+const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, onUpdateLineItem, onRemoveLineItem, onRemovePackage, onOpenMenus, onOpenBasement, onOpenNotes, onOpenGenerate, onOpenStory, onReissue, onPatchEstimate }) => {
   // Per-row description expansion (view more)
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const toggleRow = (id) => setExpandedRows((prev) => {
@@ -1550,15 +1550,36 @@ const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, o
     setEditingFinal(false);
   };
   const cancelEditFinal = () => { setEditingFinal(false); setDraftFinal(""); };
-  const sections = useMemo(() => {
-    const map = {};
+  // Line items split into (a) package groups (rendered as a single Package
+  // Card showing the priced anchor + included satellites) and (b) regular
+  // category sections (rendered as today). Package items are excluded from
+  // category sections so they live only inside their Package Card.
+  const { packageGroups, sections } = useMemo(() => {
+    const pkgMap = {}; // packageInstanceId → group
+    const cat = {};    // category → { display, items }
+
     estimate.lineItems.forEach((li) => {
       const sku = CATALOG.find((s) => s.sku === li.sku);
       if (!sku) return;
-      if (!map[sku.category]) map[sku.category] = { display: sku.categoryDisplay, items: [] };
-      map[sku.category].items.push({ ...li, sku });
+      if (li.packageInstanceId) {
+        if (!pkgMap[li.packageInstanceId]) {
+          pkgMap[li.packageInstanceId] = {
+            id: li.packageInstanceId,
+            label: li.packageLabel,
+            config: PACKAGES.find((p) => p.key === li.packageKey) || null,
+            anchor: null,
+            satellites: [],
+          };
+        }
+        const enriched = { ...li, sku };
+        if (li.bundled) pkgMap[li.packageInstanceId].satellites.push(enriched);
+        else pkgMap[li.packageInstanceId].anchor = enriched;
+      } else {
+        if (!cat[sku.category]) cat[sku.category] = { display: sku.categoryDisplay, items: [] };
+        cat[sku.category].items.push({ ...li, sku });
+      }
     });
-    return Object.values(map);
+    return { packageGroups: Object.values(pkgMap), sections: Object.values(cat) };
   }, [estimate]);
 
   const computedTotal = useMemo(() => {
@@ -1703,6 +1724,142 @@ const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, o
           </CollapsibleCard>
         </div>
 
+        {/* Package groups — each package renders as a single grouped card with
+            the priced anchor on top + a collapsed list of "Included" satellites. */}
+        {packageGroups.map((grp) => {
+          const PkgIcon = grp.config?.icon || Package;
+          const pkgAccent = grp.config?.accent || T.tilePurple;
+          const pkgAccentInk = grp.config?.accentInk || T.tilePurpleInk;
+          const anchor = grp.anchor;
+          const anchorSku = anchor?.sku;
+          const anchorPrice = anchor && anchorSku
+            ? (anchor.customPrice ?? anchorSku.unitPrice * anchor.qty)
+            : 0;
+          const decAnchorQty = (e) => {
+            e.stopPropagation();
+            if (!anchor) return;
+            onUpdateLineItem && onUpdateLineItem(anchor.id, { qty: Math.max(1, (anchor.qty || 1) - 1) });
+          };
+          const incAnchorQty = (e) => {
+            e.stopPropagation();
+            if (!anchor) return;
+            onUpdateLineItem && onUpdateLineItem(anchor.id, { qty: (anchor.qty || 0) + 1 });
+          };
+          return (
+            <div key={grp.id} className="px-4 mb-3">
+              <Card className="overflow-hidden" style={{ background: T.purpleSofter, borderColor: `${T.purpleAccent}44` }}>
+                {/* Package header */}
+                <div className="px-4 pt-3 pb-2.5 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: pkgAccent }}>
+                    <PkgIcon size={18} color={pkgAccentInk} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Package size={11} color={T.purpleAccent} />
+                      <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: T.purpleAccent }}>Package</span>
+                    </div>
+                    <h3 className="text-sm font-bold leading-tight" style={{ color: T.text }}>{grp.label}</h3>
+                    <p className="text-[10px]" style={{ color: T.textSecondary }}>
+                      1 priced item · {grp.satellites.length} included
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[9px] font-bold tracking-wider uppercase" style={{ color: T.textSecondary }}>Pkg total</p>
+                    <p className="text-base font-extrabold" style={{ color: T.purpleAccent }}>{fmt$0(anchorPrice)}</p>
+                  </div>
+                  <button
+                    onClick={() => onRemovePackage && onRemovePackage(grp.id)}
+                    className="p-1.5 -mr-1 active:scale-95 flex-shrink-0 rounded"
+                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
+                    aria-label="Remove package"
+                    title="Remove entire package"
+                  >
+                    <Trash2 size={13} color={T.error} />
+                  </button>
+                </div>
+
+                {/* Anchor row — full-width, white surface, prominent */}
+                {anchor && anchorSku && (
+                  <button
+                    onClick={() => onEditLineItem && onEditLineItem(anchor.id)}
+                    className="w-full text-left px-4 py-3 active:bg-slate-50"
+                    style={{ background: T.surface, borderTop: `1px solid ${T.purpleAccent}33`, borderBottom: `1px solid ${T.borderSoft}` }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: anchorSku.accent }}>
+                        <anchorSku.icon size={18} color={anchorSku.accentInk} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h4 className="text-sm font-bold leading-tight" style={{ color: T.text }}>{anchorSku.title}</h4>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0" style={{ background: T.purpleSoft, color: T.purpleAccent }}>
+                            <DollarSign size={9} /> PRICED ANCHOR
+                          </span>
+                        </div>
+                        <p className="text-xs leading-relaxed line-clamp-2 mb-2" style={{ color: T.textSecondary }}>
+                          {anchor.customDescription || anchorSku.description}
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div
+                            className="inline-flex items-center rounded-lg overflow-hidden"
+                            style={{ background: T.surface, border: `1px solid ${T.border}` }}
+                          >
+                            <span onClick={decAnchorQty} role="button" tabIndex={0}
+                              className="w-7 h-7 inline-flex items-center justify-center active:scale-95"
+                              style={{ color: T.text }} aria-label="Decrease LF">−</span>
+                            <span className="px-2 text-xs font-bold tabular-nums" style={{ color: T.text, minWidth: 44, textAlign: "center" }}>
+                              {anchor.qty} {anchorSku.uom}
+                            </span>
+                            <span onClick={incAnchorQty} role="button" tabIndex={0}
+                              className="w-7 h-7 inline-flex items-center justify-center active:scale-95"
+                              style={{ color: T.text }} aria-label="Increase LF">+</span>
+                          </div>
+                          <span className="text-[11px] font-semibold tabular-nums" style={{ color: T.textSecondary }}>
+                            × {fmt$(anchorSku.unitPrice)} = <span className="font-extrabold" style={{ color: T.purpleAccent }}>{fmt$(anchorPrice)}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {/* Satellites — compact rows, "Included" badge */}
+                {grp.satellites.length > 0 && (
+                  <>
+                    <div className="px-4 py-1.5 flex items-center gap-2" style={{ background: T.surfaceAlt }}>
+                      <Check size={10} color={T.success} />
+                      <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: T.textSecondary }}>
+                        Included with this package
+                      </span>
+                    </div>
+                    {grp.satellites.map((sat, idx) => (
+                      <button
+                        key={sat.id}
+                        onClick={() => onEditLineItem && onEditLineItem(sat.id)}
+                        className="w-full text-left px-4 py-2 active:bg-slate-50"
+                        style={{ background: T.surface, borderTop: idx === 0 ? `1px solid ${T.borderSoft}` : `1px solid ${T.borderSoft}` }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: sat.sku.accent }}>
+                            <sat.sku.icon size={13} color={sat.sku.accentInk} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold leading-tight truncate" style={{ color: T.text }}>{sat.sku.title}</p>
+                            <p className="text-[10px] truncate" style={{ color: T.textTertiary }}>{sat.sku.categoryDisplay}</p>
+                          </div>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0" style={{ background: T.successSoft, color: T.success }}>
+                            <Check size={9} /> Included
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </Card>
+            </div>
+          );
+        })}
+
         {/* Sections of line items */}
         {sections.map((section) => (
           <div key={section.display} className="px-4 mb-3">
@@ -1814,14 +1971,6 @@ const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, o
                               +
                             </span>
                           </div>
-                          {it.bundledFromPackage && (
-                            <span
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                              style={{ background: T.successSoft, color: T.success }}
-                            >
-                              <Package size={10} /> Included · $0
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -4353,18 +4502,30 @@ export default function App() {
 
   const addPackage = (pkg) => {
     const stamp = Date.now();
+    const packageInstanceId = `pkg-${stamp}`;
     const newItems = pkg.items.map((pi, idx) => ({
       id: `li-pkg-${stamp}-${idx}`,
       sku: pi.sku,
       qty: pi.qty,
       customDescription: null,
-      // Bundled items ride along at $0 — they contribute nothing to the total
-      // regardless of qty. Anchor items keep their catalog unitPrice.
+      // Bundled satellites ride along at $0 — they contribute nothing to the
+      // total regardless of qty. The anchor (bundled: false) keeps unitPrice
+      // and drives the package's contract value.
       customPrice: pi.bundled ? 0 : null,
-      bundledFromPackage: pi.bundled ? pkg.title : null,
+      packageInstanceId,
+      packageLabel: pkg.title,
+      packageKey: pkg.key,
+      bundled: !!pi.bundled,
     }));
     setEstimate((e) => ({ ...e, lineItems: [...e.lineItems, ...newItems] }));
     setShowLineItem(false);
+  };
+
+  const removePackage = (packageInstanceId) => {
+    setEstimate((e) => ({
+      ...e,
+      lineItems: e.lineItems.filter((li) => li.packageInstanceId !== packageInstanceId),
+    }));
   };
 
   const updateLineItem = (id, patch) => {
@@ -4423,6 +4584,7 @@ export default function App() {
             onEditLineItem={openEditLineItem}
             onUpdateLineItem={updateLineItem}
             onRemoveLineItem={removeLineItem}
+            onRemovePackage={removePackage}
             onOpenMenus={() => setShowMenus(true)}
             onOpenBasement={() => setScene("basement")}
             onOpenNotes={() => setScene("notes")}
