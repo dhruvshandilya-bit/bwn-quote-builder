@@ -417,6 +417,144 @@ const makeDefaultPrepChecklist = () => ({
   acks: { dust: true, sumpPower: true, wallStayFee: true, floorReplace: true, fireplaces: false, radon: false },
 });
 
+// Build a print-faithful, populated reproduction of the paper BWN Customer
+// Preparation Checklist from live estimate state, then open it in a new tab
+// with a Save-as-PDF toolbar. Library-free (browser print → PDF).
+const _esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const _mdY = (iso) => { const p = String(iso || "").split("-"); return p.length === 3 ? `${p[1]}/${p[2]}/${p[0]}` : (iso || ""); };
+const _cb = (on) => `<span class="cb${on ? " on" : ""}"></span>`;
+
+function buildChecklistPdfHtml(estimate) {
+  const C = PREP_CHECKLIST_COPY;
+  const pc = estimate.prepChecklist || makeDefaultPrepChecklist();
+  const cust = estimate.customer || {};
+  const signed = estimate.status === "SIGNED";
+  const left = PREP_CHECKLIST_ITEMS.slice(0, 8);
+  const right = PREP_CHECKLIST_ITEMS.slice(8);
+  const colHdr = '<div class="colhdr"><span>Item to<br>Move</span><span>Item to<br>Stay</span><span></span></div>';
+  const itemRows = (arr) => colHdr + arr.map((it) => {
+    const d = pc.items[it.key];
+    return `<div class="irow">${_cb(d === "move")}${_cb(d === "stay")}<span>${_esc(it.label)}</span></div>`;
+  }).join("");
+  const wallOpts = C.walls.map((o) => `<div class="opt">${_cb(pc.walls === o.key)}<span><b>${_esc(o.label)}:</b> ${_esc(o.desc)}</span></div>`).join("");
+  const floorOpts = C.floors.map((o) => `<div class="opt">${_cb(pc.floors === o.key)}<span><b>${_esc(o.label)}:</b> ${_esc(o.desc)}</span></div>`).join("");
+  const locOpts = C.sumpLocations.map((l) => `<span class="o">${_cb(pc.sumpLocations.includes(l.key))}${_esc(l.label)}</span>`).join("");
+  const specified = pc.sumpLocations.includes("specified") && pc.sumpSpecified ? ` &nbsp;·&nbsp; <b>Specified:</b> ${_esc(pc.sumpSpecified)}` : "";
+  const dustCust = C.dustCustomer.map((b) => `<li>${_esc(b)}</li>`).join("");
+  const dustBwn = C.dustBwn.map((b) => `<li>${_esc(b)}</li>`).join("");
+  const sumpBul = C.sumpBullets.map((b) => `<li style="font-size:8.2px;line-height:1.4;">${_esc(b)}</li>`).join("");
+  const sig = (name) => signed && name ? `<div class="ink">${_esc(name)}</div>` : `<div class="ink"></div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Customer Preparation Checklist — ${_esc(cust.name || "")}</title>
+<style>
+@page { size: letter; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; background:#e9e9ee; }
+.toolbar { position: sticky; top: 0; display:flex; gap:10px; align-items:center; justify-content:space-between; background:#5b2d8e; color:#fff; padding:10px 16px; font-size:13px; }
+.toolbar button { background:#fff; color:#5b2d8e; border:none; border-radius:7px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer; }
+.page { width: 8.5in; min-height: 11in; padding: 0.45in 0.5in; margin: 16px auto; background: #fff; box-shadow:0 2px 12px rgba(0,0,0,.15); }
+.hdr { display: flex; justify-content: space-between; align-items: flex-start; }
+.logo { display: flex; align-items: center; gap: 8px; }
+.logo .mark span { display:inline-block; width:11px; height:26px; margin-right:2px; transform: skewX(-8deg); }
+.logo .b1{background:#1e3a8a} .logo .b2{background:#dc2626} .logo .b3{background:#1e3a8a}
+.logo .txt b { font-size: 17px; font-weight: 800; letter-spacing:.5px; color:#1e3a8a; display:block; line-height:1; }
+.logo .txt small { font-size: 8px; font-weight:700; letter-spacing:2px; color:#dc2626; }
+.hdr .title { text-align: right; } .hdr .title .v { font-size: 8px; font-style: italic; color:#dc2626; }
+.hdr .title b { display:block; font-size: 12px; font-weight: 800; letter-spacing:.5px; }
+.namerow { display:flex; gap: 24px; margin: 14px 0 10px; font-size: 11px; }
+.namerow .f { flex:1; display:flex; align-items:flex-end; gap:6px; }
+.namerow .line { flex:1; border-bottom: 1px solid #111; padding: 0 4px 1px; font-weight:600; }
+.sec { border: 1.5px solid #dc2626; border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; }
+.sec h2 { font-size: 10.5px; margin: 0 0 6px; font-weight: 800; text-transform: uppercase; line-height:1.35; }
+.sec .warn { font-size: 9px; font-weight: 700; margin: 0 0 8px; line-height:1.4; }
+.marg { display:flex; } .marg .tag { font-size: 8px; color:#555; width: 46px; flex-shrink:0; padding-top: 18px; }
+.grid { flex:1; display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+.colhdr { display:grid; grid-template-columns: 34px 34px 1fr; font-size: 7.5px; font-weight:700; color:#222; margin-bottom:2px; }
+.colhdr span { line-height:1.05; }
+.irow { display:grid; grid-template-columns: 34px 34px 1fr; align-items:center; font-size: 9px; padding: 1.5px 0; }
+.cb { width: 11px; height: 11px; border: 1.2px solid #111; display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:900; line-height:1; }
+.cb.on::after { content:"\\2715"; }
+.notes { display:flex; align-items:flex-end; gap:6px; font-size:10px; font-weight:800; margin-top:6px; }
+.notes .line { flex:1; border-bottom: 1px solid #111; font-weight:500; padding: 0 4px 1px; }
+.wf { display:grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+.wf h3 { font-size: 9px; margin: 2px 0 4px; font-weight:800; }
+.opt { display:flex; gap:5px; font-size: 8.5px; margin-bottom:4px; line-height:1.3; }
+.note-sm { font-size: 8px; line-height:1.35; margin-top:2px; }
+.cols2 { display:grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+.cols2 h3 { font-size:9px; font-weight:800; margin:0 0 3px; }
+.cols2 ul, .sec ul { margin:0; padding-left: 12px; }
+.cols2 li { font-size: 8.2px; line-height:1.4; margin-bottom:2px; }
+.loc { display:flex; flex-wrap:wrap; gap: 4px 14px; font-size:8.5px; margin-top:6px; align-items:center; }
+.loc .lbl { font-weight:800; } .loc .o { display:flex; align-items:center; gap:4px; }
+.other p { font-size: 8.2px; line-height:1.4; margin: 3px 0; } .other b { font-weight:800; }
+.ack { font-size: 10px; font-weight: 800; margin: 10px 0 16px; }
+.sigs { display:grid; grid-template-columns: 1fr 1fr; gap: 22px 26px; }
+.sig .ln { border-top: 1px solid #111; padding-top: 2px; font-size: 7.5px; font-weight:700; letter-spacing:.5px; }
+.sig .ink { font-family: 'Segoe Script','Brush Script MT',cursive; font-size: 17px; color:#1e3a8a; height: 20px; padding-left: 6px; }
+@media print { .toolbar { display:none; } body { background:#fff; } .page { margin:0; box-shadow:none; } }
+</style></head><body>
+<div class="toolbar"><span>Customer Preparation Checklist — preview${signed ? " · SIGNED" : ""}</span><button onclick="window.print()">Save as PDF</button></div>
+<div class="page">
+  <div class="hdr">
+    <div class="logo"><div class="mark"><span class="b1"></span><span class="b2"></span><span class="b3"></span></div>
+      <div class="txt"><b>BASEMENT</b><small>WATERPROOFING&nbsp;&nbsp;NATIONWIDE</small></div></div>
+    <div class="title"><div class="v">${_esc(C.version)}</div><b>CUSTOMER PREPARATION</b><b>CHECKLIST</b></div>
+  </div>
+  <div class="namerow">
+    <div class="f"><span>Name</span><span class="line">${_esc(cust.name || "")}</span></div>
+    <div class="f" style="max-width:2.6in;"><span>Contract Date</span><span class="line">${_esc(_mdY(pc.contractDate))}</span></div>
+  </div>
+  <div class="sec">
+    <div class="warn">${_esc(C.itemsIntro1).toUpperCase()}</div>
+    <div class="warn" style="font-weight:600;">${_esc(C.itemsIntro2).toUpperCase()}</div>
+    <div class="marg"><div class="tag">Customer</div><div class="grid"><div>${itemRows(left)}</div><div>${itemRows(right)}</div></div></div>
+    <div class="notes"><span>NOTES:</span><span class="line">${_esc(pc.itemsNotes || "")}</span></div>
+  </div>
+  <div class="sec">
+    <h2>${_esc(C.wallsFloorsHeading)}</h2>
+    <div class="marg"><div class="tag">Customer</div><div style="flex:1;"><div class="wf">
+      <div><h3>WALLS</h3>${wallOpts}<div class="note-sm">${_esc(C.wallStayNote)}</div></div>
+      <div><h3>FLOORS</h3>${floorOpts}<div class="note-sm"><b>${_esc(C.floorNote)}</b></div></div>
+    </div></div></div>
+  </div>
+  <div class="sec">
+    <h2>${_esc(C.dustHeading)}</h2>
+    <div class="marg"><div class="tag">Customer</div><div class="cols2" style="flex:1;">
+      <div><h3>CUSTOMER PREPARATIONS</h3><ul>${dustCust}</ul></div>
+      <div><h3>BWN PREPARATIONS</h3><ul>${dustBwn}</ul></div>
+    </div></div>
+  </div>
+  <div class="sec">
+    <h2>${_esc(C.sumpHeading)}</h2>
+    <div class="marg"><div class="tag">Customer</div><div style="flex:1;">
+      <ul>${sumpBul}</ul>
+      <div class="loc"><span class="lbl">SUMP PUMP LOCATIONS:</span>${locOpts}${specified}</div>
+    </div></div>
+  </div>
+  <div class="sec other">
+    <h2>OTHER ITEMS: SPECIAL NOTES.</h2>
+    <div class="marg"><div class="tag">Customer</div><div style="flex:1;">
+      <p>${_esc(C.fireplaces)}</p><p>${_esc(C.radon)}</p>
+    </div></div>
+  </div>
+  <div class="ack">${_esc(C.acknowledgment)}</div>
+  <div class="sigs">
+    <div class="sig">${sig(cust.contact || cust.name)}<div class="ln">CUSTOMER SIGNATURE</div></div>
+    <div class="sig">${sig(signed ? "Mike R." : "")}<div class="ln">BWN REPRESENTATIVE</div></div>
+    <div class="sig">${sig("")}<div class="ln">CUSTOMER SIGNATURE</div></div>
+    <div class="sig">${sig("")}<div class="ln">BWN OFFICER SIGNATURE</div></div>
+  </div>
+</div></body></html>`;
+}
+
+function openChecklistPdfPreview(estimate) {
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.open();
+  w.document.write(buildChecklistPdfHtml(estimate));
+  w.document.close();
+}
+
 const LEAD_QUEUE = [
   {
     id: "LEAD-2026-0411",
@@ -3034,7 +3172,7 @@ const ChecklistAckRow = ({ icon: Icon, checked, onToggle, children }) => (
   </button>
 );
 
-const PrepChecklistScreen = ({ value, customerName, onBack, onSave, onOpenStory }) => {
+const PrepChecklistScreen = ({ value, customerName, estimate, onBack, onSave, onOpenStory }) => {
   const C = PREP_CHECKLIST_COPY;
   const [st, setSt] = useState(value || makeDefaultPrepChecklist());
   const [recent, setRecent] = useState(null);
@@ -3253,10 +3391,17 @@ const PrepChecklistScreen = ({ value, customerName, onBack, onSave, onOpenStory 
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t" style={{ background: T.surface, borderColor: T.border }}>
+      <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t flex gap-2" style={{ background: T.surface, borderColor: T.border }}>
+        <button
+          onClick={() => openChecklistPdfPreview({ ...estimate, prepChecklist: st })}
+          className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg text-sm font-semibold active:scale-95"
+          style={{ background: T.purpleSofter, color: T.purple, border: `1px solid ${T.purple}33` }}
+        >
+          <Eye size={15} /> Preview PDF
+        </button>
         <button
           onClick={() => onSave(st)}
-          className="w-full py-3 rounded-lg text-sm font-semibold active:scale-95"
+          className="flex-1 py-3 rounded-lg text-sm font-semibold active:scale-95"
           style={{ background: T.purple, color: "#fff" }}
         >
           Save checklist{stayCount > 0 ? ` · ${stayCount} staying` : ""}
@@ -3783,7 +3928,14 @@ const QuotePreviewScreen = ({ estimate, onBack, onSign, onOpenStory, orgConfig, 
               </div>
 
               <p className="text-[9px] leading-snug pt-1.5 mb-2" style={{ color: T.textSecondary, borderTop: `1px solid ${T.borderSoft}` }}>“{C.acknowledgment}”</p>
-              <p className="text-[10px]" style={{ color: T.textTertiary }}>Signature point #3 captured on page 4a.</p>
+              <p className="text-[10px] mb-2" style={{ color: T.textTertiary }}>Signature point #3 captured on page 4a.</p>
+              <button
+                onClick={() => openChecklistPdfPreview(estimate)}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold active:scale-95"
+                style={{ background: T.purpleSofter, color: T.purple, border: `1px solid ${T.purple}33` }}
+              >
+                <Eye size={13} /> Preview as PDF (full page)
+              </button>
             </Card>
           );
         })()}
@@ -5072,6 +5224,7 @@ export default function App() {
           <PrepChecklistScreen
             value={estimate.prepChecklist || makeDefaultPrepChecklist()}
             customerName={estimate.customer?.name || "—"}
+            estimate={estimate}
             onBack={() => setScene("detail")}
             onSave={(pc) => { setEstimate({ ...estimate, prepChecklist: pc }); setScene("detail"); }}
             onOpenStory={openStory}
