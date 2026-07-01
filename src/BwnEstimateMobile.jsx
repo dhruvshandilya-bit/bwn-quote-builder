@@ -9,6 +9,7 @@ import {
   CheckCircle2, AlertTriangle, ChevronUp, MoreVertical, Send, Tag,
   CircleDot, FileCheck, Banknote, ScrollText, Eye, Wand2, ChevronLeft,
   Layers, Hammer, Wrench, Droplets, Mic,
+  ListChecks, Flame, Radiation,
 } from "lucide-react";
 
 // ============================================================================
@@ -73,6 +74,7 @@ const STORIES = {
   "BWN-107": { title: "Sale page — editable totals, lifecycle, quote import", priority: "M", phase: 2, status: "To Do", note: "Sale lifecycle Working → Net → Paid in Full → Final, each transition timestamped. Sold Price auto-totals, total-level override (Edit Sold Price). Form-of-Payment enum. Late Payment per-contract editable default 2%/mo. $250 service charge editable per-contract. Import Quote pulls items + signatures." },
   "BWN-111": { title: "N1 · Basement Preparations & Notes section", priority: "M", phase: 1, status: "In progress", note: "11 selectable sub-items in 2 groups. Customer Responsibilities (7): Items to Move/Stay (default 'None'), Wall Coverings, Floor Coverings, Electrical Disconnection, Plumbing Disconnection, HVAC/Duct Relocation. Basement Notes (4): Existing Sump Pump Disposition, Drain Tile Connection, Egress Window Access, Other Notes (free-text). Renders PDF p3–4 + signature #2." },
   "BWN-112": { title: "N2 · Free-text Notes block on Quote", priority: "M", phase: 1, status: "In progress", note: "Per-quote text area, separate from CRM activity feed. Auto-saves. 'Include in PDF' default OFF. When ON, prints within Basement Preps & Notes on p3–4. Locks into signed PDF artifact at sign-time. Searchable in office list." },
+  "BWN-130": { title: "N9 · Customer Preparation Checklist (digitized Pre-Inspect form)", priority: "M", phase: 1, status: "In progress", note: "Verbatim digitization of the BWN paper Customer Preparation Checklist (Ver. 12/06/23). 16-item work-area grid with Move/Stay/N-A per item — any 'Stay' auto-flags service-fee exposure and surfaces the count on the card + PDF. Walls (No coverings / Flood cut / Full demo) and Floors (Bare / Carpet 5′ / Tile 2′) single-select. Dust, sump-power, fireplace, and radon acknowledgments captured. Sump location multi-select + Specified free-text (mic-enabled). NOTES free-text. Renders PDF page 4a + signature point #3 (renumbers Cancellation→4, Payment→5, T&C→6, Lead Form→7). Separate section, sits below BWN-111." },
   "BWN-113": { title: "N3 · 'Additional Work' SKU type — free-text", priority: "M", phase: 2, status: "In progress", note: "Pre-seeded SaleItem, category=ADDITIONAL_WORK, isFreeText=true. All 4 fields editable on that line (title, description, qty, unitPrice). Multiple lines allowed. Feeds into auto-total. The one escape hatch from the locked-description model." },
   "BWN-114": { title: "N4 · Notice of Cancellation — state × age", priority: "M", phase: 2, status: "Blocked — A3 pending", note: "MD <65 = 5 biz days · MD 65+ = 7 biz days · other = 3 biz days. State parsed from address. Cancel-by date = contract date + N biz days (skip weekends + US federal holidays). Renders p5 (buyer) + p10 (seller). LOCKED ON for BWN. Final language from Steve." },
   "BWN-115": { title: "N5 · Pre-Renovation Lead Form (federal RRP)", priority: "M", phase: 2, status: "To Do", note: "yearBuilt < 1978 → toggle auto-ON, page 9 renders. ≥1978 → optional, p9 omitted (numbering adjusts). Tenant self-cert HIDDEN unless occupancy=tenant. Signature #6 on p9. RRP fields (Pamphlet Given/Signed dates) auto-stamp at sign-time." },
@@ -320,6 +322,100 @@ const BASEMENT_PREP_ITEMS = [
   { key: "sumpPumpLocation",   label: "Sump Pump Specified Location", group: "Basement Notes",           isFreeText: true, boilerplate: "Northeast corner of basement, beneath existing utility shelf." },
   { key: "otherNotes",         label: "Other Notes",                 group: "Basement Notes",            isFreeText: true, boilerplate: "" },
 ];
+
+// ============================================================================
+// PREP_CHECKLIST (BWN-130) — verbatim digitization of the BWN paper
+// "Customer Preparation Checklist" (Ver. 12/06/23). Separate from BWN-111.
+// 16 work-area items (Move/Stay/N-A), Walls + Floors, Dust, Sump, Other Items.
+// Kept in paper column order: left column (8) then right column (8).
+// ============================================================================
+const PREP_CHECKLIST_ITEMS = [
+  // Left column on paper
+  { key: "washerDryer",    label: "Washing machine / dryer / set tub" },
+  { key: "hotWaterTank",   label: "Hot water tank" },
+  { key: "furnaceBoiler",  label: "Furnace / boiler / AC unit" },
+  { key: "wellTankPump",   label: "Well tank / well pump" },
+  { key: "waterTreatment", label: "Water treatment tanks" },
+  { key: "fridgeFreezer",  label: "Refrigerator / freezer" },
+  { key: "stove",          label: "Stove — wood / gas" },
+  { key: "oilTankLines",   label: "Oil tank / oil lines above – below" },
+  // Right column on paper
+  { key: "toiletVanity",   label: "Toilet / vanity / sink" },
+  { key: "showerTub",      label: "Shower stall / tub" },
+  { key: "shelvesCabinets",label: "Shelves / cabinets" },
+  { key: "benches",        label: "Benches — work-seating" },
+  { key: "stairsLandings", label: "Stairs / landings" },
+  { key: "raisedFloorsBar",label: "Raised floors / bar" },
+  { key: "baseboardHeat",  label: "Baseboard heat — electric / water" },
+  { key: "radiators",      label: "Radiators / space heater" },
+];
+
+const PREP_CHECKLIST_COPY = {
+  version: "Ver. 12/06/23",
+  itemsIntro1: "All customer items listed below are to be moved 5′ from the contracted area prior to the arrival of the BWN crew.",
+  itemsIntro2: "If customer requests any item to stay in place, later access to these areas would be required and a service fee applicable for BWN to return and make necessary repairs.",
+  wallsFloorsHeading: "BWN recommends walls and floors be made bare and accessible for the waterproofing installation.",
+  walls: [
+    { key: "noCoverings", label: "No wall coverings", desc: "Basement walls are bare and accessible in the contracted area." },
+    { key: "floodCut",    label: "Flood cut",         desc: "Lower wall coverings and framing baseplate to be removed to provide access for waterproofing installation." },
+    { key: "fullDemo",    label: "Full demo",         desc: "All wall coverings to be removed to provide access for vapor barrier installation." },
+  ],
+  wallStayNote: "Wall coverings that stay in place during waterproofing installation: customer understands later access to these areas would be required and a service fee applicable for BWN to return and make necessary repairs.",
+  floors: [
+    { key: "noCoverings", label: "No floor coverings",            desc: "Basement floors are bare and accessible in the contracted area." },
+    { key: "carpet",      label: "Carpet",                        desc: "To be rolled back from contracted area a minimum of 5′ and covered with plastic." },
+    { key: "tile",        label: "Tile and other floor coverings",desc: "To be removed a minimum of 2′ from wall in contracted area." },
+  ],
+  floorNote: "Replacement and reinstallation of all disturbed floor coverings is customer responsibility.",
+  dustHeading: "Dust: customer should be prepared for a substantial amount of dust.",
+  dustCustomer: [
+    "All customer items should be moved to the center of the basement and covered with plastic.",
+    "All rooms adjacent to contracted area should be protected against dust using plastic including doorways, vents, and open stairways.",
+    "Furnace and A/C should be shut down during the jackhammering process.",
+  ],
+  dustBwn: [
+    "Air Scrubber will be used to minimize dust in contracted area.",
+    "BWN will cover floors with protective materials.",
+    "Professional and responsible work practices in effect at all times.",
+  ],
+  sumpHeading: "Sump pump: sump pump is to be connected to a working electric outlet at all times.",
+  sumpBullets: [
+    "The supply of electric power to the sump pump is customer responsibility.",
+    "New PVC discharge lines are to exit the wall and extend above grade up to 5′ with 4″ solid pipe.",
+    "Customer understands BWN does not recommend connecting to existing buried drainage lines.",
+    "In the event customer requests a new discharge line to be connected to an existing buried line, keeping the existing buried line free and clear of debris to protect sump pump operations is customer responsibility.",
+  ],
+  sumpLocations: [
+    { key: "frontRight", label: "Front right" },
+    { key: "frontLeft",  label: "Front left" },
+    { key: "rearRight",  label: "Rear right" },
+    { key: "rearLeft",   label: "Rear left" },
+    { key: "existing",   label: "Existing location" },
+    { key: "specified",  label: "Specified location" },
+    { key: "leaveAsIs",  label: "Leave as-is" },
+  ],
+  fireplaces: "Fireplaces and chimneys: any water seepage in the firebox, hearth, mantle, cleanout box, and flu liner areas are excluded from BWN's scope of work. BWN will install the below floor drainage system up to each side of the fireplace.",
+  radon: "Radon systems: any testing or adjustments to existing radon systems following the waterproofing installation is customer responsibility.",
+  acknowledgment: "I acknowledge that I have read and understand all of the necessary preparations for my waterproofing installation.",
+};
+
+// Default checklist state seeded onto a new estimate (3 items pre-set to "stay"
+// to demonstrate the service-fee flag; everything else defaults to "move").
+const makeDefaultPrepChecklist = () => ({
+  contractDate: "2026-06-26",
+  items: Object.fromEntries(
+    PREP_CHECKLIST_ITEMS.map((it) => [
+      it.key,
+      ["furnaceBoiler", "shelvesCabinets", "stairsLandings"].includes(it.key) ? "stay" : "move",
+    ])
+  ),
+  itemsNotes: "",
+  walls: "noCoverings",
+  floors: "noCoverings",
+  sumpLocations: ["frontLeft"],
+  sumpSpecified: "",
+  acks: { dust: true, sumpPower: true, wallStayFee: true, floorReplace: true, fireplaces: false, radon: false },
+});
 
 const LEAD_QUEUE = [
   {
@@ -1527,7 +1623,7 @@ const CreateQuoteModal = ({ open, onClose, onCreate, onOpenStory, orgConfig }) =
 // ============================================================================
 // 4. QUOTE DETAIL SCREEN — Contract Terms + sections of line items (BWN-22)
 // ============================================================================
-const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, onUpdateLineItem, onRemoveLineItem, onRemovePackage, onOpenMenus, onOpenBasement, onOpenNotes, onOpenGenerate, onOpenStory, onReissue, onPatchEstimate }) => {
+const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, onUpdateLineItem, onRemoveLineItem, onRemovePackage, onOpenMenus, onOpenBasement, onOpenChecklist, onOpenNotes, onOpenGenerate, onOpenStory, onReissue, onPatchEstimate }) => {
   // Per-row description expansion (view more)
   const [expandedRows, setExpandedRows] = useState(() => new Set());
   const toggleRow = (id) => setExpandedRows((prev) => {
@@ -2008,6 +2104,41 @@ const QuoteDetailScreen = ({ estimate, onBack, onOpenLineItem, onEditLineItem, o
             </button>
           </Card>
         </div>
+
+        {/* Customer Preparation Checklist card (BWN-130) — digitized Pre-Inspect form */}
+        {(() => {
+          const pc = estimate.prepChecklist || makeDefaultPrepChecklist();
+          const stayCount = PREP_CHECKLIST_ITEMS.filter((it) => pc.items[it.key] === "stay").length;
+          return (
+            <div className="px-4 mb-3">
+              <Card className="overflow-hidden">
+                <button
+                  onClick={onOpenChecklist}
+                  className="w-full px-4 py-3.5 flex items-center justify-between active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: T.tileGreen }}>
+                      <ListChecks size={18} color={T.tileGreenInk} />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-bold text-sm" style={{ color: T.text }}>Customer Preparation Checklist</h3>
+                      <p className="text-xs" style={{ color: T.textSecondary }}>
+                        6 of 6 sections
+                        {stayCount > 0 && (
+                          <> · <span style={{ color: T.warning, fontWeight: 700 }}>{stayCount} item{stayCount !== 1 ? "s" : ""} staying</span></>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StoryBadge ids={["BWN-130"]} onOpen={onOpenStory} />
+                    <ChevronRight size={18} color={T.textSecondary} />
+                  </div>
+                </button>
+              </Card>
+            </div>
+          );
+        })()}
 
         {/* Notes card */}
         <div className="px-4 mb-3">
@@ -2877,6 +3008,265 @@ const BasementPrepScreen = ({ items, onBack, onSave, onOpenStory }) => {
 };
 
 // ============================================================================
+// 7b. CUSTOMER PREPARATION CHECKLIST SCREEN (BWN-130)
+//     Verbatim digitization of the BWN paper "Customer Preparation Checklist".
+// ============================================================================
+const DISPOSITIONS = [
+  { v: "move", label: "Move", ink: "#166534", bg: T.successSoft, bd: "#86efac" },
+  { v: "stay", label: "Stay", ink: "#c2410c", bg: T.warningSoft, bd: "#fdba74" },
+  { v: "na",   label: "N/A",  ink: T.textSecondary, bg: "#f3f4f6", bd: "#d1d5db" },
+];
+
+const ChecklistAckRow = ({ icon: Icon, checked, onToggle, children }) => (
+  <button
+    onClick={onToggle}
+    className="w-full flex items-start gap-2.5 p-2.5 rounded-lg text-left active:scale-[0.99] transition-colors mb-1.5"
+    style={{ background: checked ? T.purpleSofter : T.surface, border: `1px solid ${checked ? `${T.purple}55` : T.border}` }}
+  >
+    <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5"
+      style={{ background: checked ? T.purple : T.surface, border: `1px solid ${checked ? T.purple : T.border}` }}>
+      {checked && <Check size={12} color="#fff" />}
+    </div>
+    <span className="text-[11px] leading-relaxed flex-1" style={{ color: T.textSecondary }}>
+      {Icon && <Icon size={12} className="inline mr-1" style={{ verticalAlign: "-1px", color: T.textTertiary }} />}
+      {children}
+    </span>
+  </button>
+);
+
+const PrepChecklistScreen = ({ value, customerName, onBack, onSave, onOpenStory }) => {
+  const C = PREP_CHECKLIST_COPY;
+  const [st, setSt] = useState(value || makeDefaultPrepChecklist());
+  const [recent, setRecent] = useState(null);
+  const timer = useRef(null);
+  const flash = (k) => { setRecent(k); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setRecent(null), 4500); };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const setItem = (k, v) => setSt((s) => ({ ...s, items: { ...s.items, [k]: v } }));
+  const setField = (patch) => setSt((s) => ({ ...s, ...patch }));
+  const setAck = (k) => setSt((s) => ({ ...s, acks: { ...s.acks, [k]: !s.acks[k] } }));
+  const toggleSump = (k) => setSt((s) => ({ ...s, sumpLocations: s.sumpLocations.includes(k) ? s.sumpLocations.filter((x) => x !== k) : [...s.sumpLocations, k] }));
+
+  const stayCount = PREP_CHECKLIST_ITEMS.filter((it) => st.items[it.key] === "stay").length;
+  const naCount   = PREP_CHECKLIST_ITEMS.filter((it) => st.items[it.key] === "na").length;
+  const moveCount = PREP_CHECKLIST_ITEMS.length - stayCount - naCount;
+  const specifiedOn = st.sumpLocations.includes("specified");
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <AppHeader
+        title="Customer Preparation Checklist"
+        subtitle={`${moveCount} move · ${stayCount} stay · ${naCount} N/A · ${C.version}`}
+        onBack={onBack}
+        right={<StoryBadge ids={["BWN-130"]} onOpen={onOpenStory} />}
+      />
+      <div className="flex-1 overflow-y-auto px-4 pb-32">
+        {/* Instructions */}
+        <div className="mt-1 mb-3 p-3 rounded-lg" style={{ background: T.purpleSofter, border: `1px dashed ${T.purpleAccent}55` }}>
+          <p className="text-[12px] leading-relaxed mb-1" style={{ color: T.purpleAccent }}>
+            <Info size={12} className="inline mr-1" style={{ verticalAlign: "-1px" }} />
+            {C.itemsIntro1}
+          </p>
+          <p className="text-[11px] leading-relaxed" style={{ color: T.textSecondary }}>{C.itemsIntro2}</p>
+        </div>
+
+        {/* Name + Contract Date */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="p-2.5 rounded-lg" style={{ background: T.surfaceAlt, border: `1px solid ${T.borderSoft}` }}>
+            <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: T.textTertiary }}>Name</p>
+            <p className="text-xs font-semibold truncate" style={{ color: T.text }}>{customerName}</p>
+          </div>
+          <div className="p-2.5 rounded-lg" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
+            <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: T.textTertiary }}>Contract date</p>
+            <input
+              type="date"
+              value={st.contractDate}
+              onChange={(e) => setField({ contractDate: e.target.value })}
+              className="text-xs font-semibold outline-none w-full bg-transparent"
+              style={{ color: T.text }}
+            />
+          </div>
+        </div>
+
+        {/* Fee warning */}
+        {stayCount > 0 && (
+          <div className="mb-3 p-2.5 rounded-lg" style={{ background: T.warningSoft, border: `1px solid ${T.warning}66` }}>
+            <p className="text-[11px] font-semibold leading-relaxed" style={{ color: T.warning }}>
+              <AlertTriangle size={12} className="inline mr-1" style={{ verticalAlign: "-1px" }} />
+              {stayCount} item{stayCount !== 1 ? "s" : ""} staying in place — later access is required and a service fee may apply for BWN to return.
+            </p>
+          </div>
+        )}
+
+        {/* Items grid */}
+        <SectionLabel right={<span className="text-[10px] font-bold" style={{ color: T.purpleAccent }}>{PREP_CHECKLIST_ITEMS.length} items</span>}>
+          Items in the work area
+        </SectionLabel>
+        <Card className="overflow-hidden mb-2">
+          {PREP_CHECKLIST_ITEMS.map((it, idx) => (
+            <div key={it.key} className="flex items-center gap-2 px-3 py-2.5" style={{ borderTop: idx === 0 ? "none" : `1px solid ${T.borderSoft}` }}>
+              <span className="text-[12px] font-semibold leading-tight flex-1 min-w-0" style={{ color: T.text }}>{it.label}</span>
+              <div className="flex gap-0.5 p-0.5 rounded-lg flex-shrink-0" style={{ background: T.surfaceAlt }}>
+                {DISPOSITIONS.map((d) => {
+                  const on = st.items[it.key] === d.v;
+                  return (
+                    <button
+                      key={d.v}
+                      onClick={() => setItem(it.key, d.v)}
+                      className="text-[10px] font-bold rounded-md active:scale-95"
+                      style={{
+                        width: 42, padding: "5px 0",
+                        background: on ? d.bg : "transparent",
+                        color: on ? d.ink : T.textTertiary,
+                        border: `1px solid ${on ? d.bd : "transparent"}`,
+                      }}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </Card>
+
+        {/* NOTES */}
+        <div className="relative mb-5">
+          <textarea
+            value={st.itemsNotes}
+            onChange={(e) => { setField({ itemsNotes: e.target.value }); if (recent === "itemsNotes") setRecent(null); }}
+            rows={2}
+            placeholder="Notes — anything the crew should know about these items…"
+            className="w-full pl-3 pr-10 py-2 rounded-md text-xs leading-relaxed outline-none resize-none"
+            style={{ background: recent === "itemsNotes" ? "#fef9c3" : T.surfaceAlt, border: `1px solid ${recent === "itemsNotes" ? "#f59e0b" : T.borderSoft}`, color: T.textSecondary }}
+          />
+          <div className="absolute right-1.5 top-1.5">
+            <VoiceMicButton sample="basementPrep" onTranscribe={(t) => { setField({ itemsNotes: st.itemsNotes ? `${st.itemsNotes} ${t}` : t }); flash("itemsNotes"); }} />
+          </div>
+        </div>
+
+        {/* Walls + Floors */}
+        <div className="mb-3 p-2.5 rounded-lg" style={{ background: T.infoSoft, border: `1px solid ${T.info}33` }}>
+          <p className="text-[11px] leading-relaxed" style={{ color: T.info }}>{C.wallsFloorsHeading}</p>
+        </div>
+
+        {[{ key: "walls", label: "Walls", opts: C.walls, note: C.wallStayNote, ack: "wallStayFee", ackLabel: "Customer understands wall coverings left in place require later access + possible service fee." },
+          { key: "floors", label: "Floors", opts: C.floors, note: C.floorNote, ack: "floorReplace", ackLabel: "Customer understands replacement and reinstallation of disturbed floor coverings is their responsibility." }].map((grp) => (
+          <div key={grp.key} className="mb-4">
+            <SectionLabel>{grp.label}</SectionLabel>
+            <Card className="overflow-hidden mb-2">
+              {grp.opts.map((o, idx) => {
+                const on = st[grp.key] === o.key;
+                return (
+                  <button key={o.key} onClick={() => setField({ [grp.key]: o.key })}
+                    className="w-full flex items-start gap-2.5 px-3 py-2.5 text-left active:scale-[0.99]"
+                    style={{ borderTop: idx === 0 ? "none" : `1px solid ${T.borderSoft}`, background: on ? T.purpleSofter : "transparent" }}>
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                      style={{ border: `1.5px solid ${on ? T.purple : T.border}` }}>
+                      {on && <div className="w-2.5 h-2.5 rounded-full" style={{ background: T.purple }} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold" style={{ color: T.text }}>{o.label}</p>
+                      <p className="text-[10px] leading-snug mt-0.5" style={{ color: T.textSecondary }}>{o.desc}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </Card>
+            <ChecklistAckRow icon={AlertCircle} checked={st.acks[grp.ack]} onToggle={() => setAck(grp.ack)}>{grp.ackLabel}</ChecklistAckRow>
+          </div>
+        ))}
+
+        {/* Dust */}
+        <SectionLabel>Dust</SectionLabel>
+        <div className="mb-2 p-2.5 rounded-lg" style={{ background: T.surfaceAlt, border: `1px solid ${T.borderSoft}` }}>
+          <p className="text-[11px] font-bold mb-2" style={{ color: T.text }}>{C.dustHeading}</p>
+          <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: T.purpleAccent }}>Customer preparations</p>
+          <ul className="mb-2 space-y-0.5">
+            {C.dustCustomer.map((b, i) => <li key={i} className="text-[10px] leading-snug" style={{ color: T.textSecondary }}>• {b}</li>)}
+          </ul>
+          <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: T.purpleAccent }}>BWN preparations</p>
+          <ul className="space-y-0.5">
+            {C.dustBwn.map((b, i) => <li key={i} className="text-[10px] leading-snug" style={{ color: T.textSecondary }}>• {b}</li>)}
+          </ul>
+        </div>
+        <ChecklistAckRow icon={Droplets} checked={st.acks.dust} onToggle={() => setAck("dust")}>
+          Customer is prepared for a substantial amount of dust and will move items to the center and cover with plastic; furnace / AC shut down during jackhammering.
+        </ChecklistAckRow>
+
+        {/* Sump pump */}
+        <div className="mt-3">
+          <SectionLabel>Sump pump</SectionLabel>
+          <div className="mb-2 p-2.5 rounded-lg" style={{ background: T.surfaceAlt, border: `1px solid ${T.borderSoft}` }}>
+            <p className="text-[11px] font-bold mb-1.5" style={{ color: T.text }}>{C.sumpHeading}</p>
+            <ul className="space-y-0.5">
+              {C.sumpBullets.map((b, i) => <li key={i} className="text-[10px] leading-snug" style={{ color: T.textSecondary }}>• {b}</li>)}
+            </ul>
+          </div>
+          <ChecklistAckRow icon={Info} checked={st.acks.sumpPower} onToggle={() => setAck("sumpPower")}>
+            Sump pump will be connected to a working electric outlet at all times; supplying electric power is customer responsibility.
+          </ChecklistAckRow>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5 mt-2" style={{ color: T.textSecondary }}>Location</p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {C.sumpLocations.map((loc) => {
+              const on = st.sumpLocations.includes(loc.key);
+              return (
+                <button key={loc.key} onClick={() => toggleSump(loc.key)}
+                  className="text-[11px] font-semibold px-3 py-1.5 rounded-full active:scale-95"
+                  style={{ background: on ? T.purple : T.surface, color: on ? "#fff" : T.textSecondary, border: `1px solid ${on ? T.purple : T.border}` }}>
+                  {loc.label}
+                </button>
+              );
+            })}
+          </div>
+          {specifiedOn && (
+            <div className="relative mb-2">
+              <textarea
+                value={st.sumpSpecified}
+                onChange={(e) => { setField({ sumpSpecified: e.target.value }); if (recent === "sump") setRecent(null); }}
+                rows={2}
+                placeholder="Describe the specified sump pump location…"
+                className="w-full pl-3 pr-10 py-2 rounded-md text-xs leading-relaxed outline-none resize-none"
+                style={{ background: recent === "sump" ? "#fef9c3" : T.surfaceAlt, border: `1px solid ${recent === "sump" ? "#f59e0b" : T.borderSoft}`, color: T.textSecondary }}
+              />
+              <div className="absolute right-1.5 top-1.5">
+                <VoiceMicButton sample="sumpLocation" onTranscribe={(t) => { setField({ sumpSpecified: st.sumpSpecified ? `${st.sumpSpecified} ${t}` : t }); flash("sump"); }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Other items */}
+        <div className="mt-3">
+          <SectionLabel>Other items · special notes</SectionLabel>
+          <ChecklistAckRow icon={Flame} checked={st.acks.fireplaces} onToggle={() => setAck("fireplaces")}>{C.fireplaces}</ChecklistAckRow>
+          <ChecklistAckRow icon={Radiation} checked={st.acks.radon} onToggle={() => setAck("radon")}>{C.radon}</ChecklistAckRow>
+        </div>
+
+        {/* Acknowledgment */}
+        <div className="mt-4 p-3 rounded-xl" style={{ background: T.purpleSofter, border: `1px solid ${T.border}` }}>
+          <p className="text-[11px] leading-relaxed mb-2" style={{ color: T.text }}>“{C.acknowledgment}”</p>
+          <div className="flex items-center gap-2 justify-center p-2.5 rounded-lg" style={{ background: T.surface, border: `1px dashed ${T.purpleAccent}66` }}>
+            <PenTool size={14} color={T.purpleAccent} />
+            <span className="text-[12px] font-semibold" style={{ color: T.purpleAccent }}>Signature point #3 · captured at Sign</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute bottom-0 left-0 right-0 px-4 py-3 border-t" style={{ background: T.surface, borderColor: T.border }}>
+        <button
+          onClick={() => onSave(st)}
+          className="w-full py-3 rounded-lg text-sm font-semibold active:scale-95"
+          style={{ background: T.purple, color: "#fff" }}
+        >
+          Save checklist{stayCount > 0 ? ` · ${stayCount} staying` : ""}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // 8. NOTES SCREEN (BWN-112)
 // ============================================================================
 const NotesScreen = ({ value, includeInPdf, onBack, onSave, onOpenStory }) => {
@@ -3183,6 +3573,7 @@ const QuotePreviewScreen = ({ estimate, onBack, onSign, onOpenStory, orgConfig, 
       { id: "page-1", label: "P1",  title: "Header" },
       { id: "page-2", label: "P2",  title: "Scope" },
       { id: "page-3", label: "P3-4", title: "Basement Prep" },
+      { id: "page-4a", label: "P4a", title: "Prep Checklist" },
       { id: "page-5", label: "P5",  title: "Cancellation" },
       { id: "page-6", label: "P6",  title: "Payment" },
       { id: "page-7", label: "P7-8", title: "T&C" },
@@ -3345,6 +3736,57 @@ const QuotePreviewScreen = ({ estimate, onBack, onSign, onOpenStory, orgConfig, 
             Signature point #2 captured on page 4.
           </p>
         </Card>
+
+        {/* Page 4a — Customer Preparation Checklist (BWN-130) */}
+        {(() => {
+          const pc = estimate.prepChecklist || makeDefaultPrepChecklist();
+          const C = PREP_CHECKLIST_COPY;
+          const dispMeta = { move: { label: "Move", color: T.success }, stay: { label: "Stay", color: T.warning }, na: { label: "N/A", color: T.textTertiary } };
+          const stayCount = PREP_CHECKLIST_ITEMS.filter((it) => pc.items[it.key] === "stay").length;
+          const wall = C.walls.find((w) => w.key === pc.walls);
+          const floor = C.floors.find((f) => f.key === pc.floors);
+          const locs = C.sumpLocations.filter((l) => pc.sumpLocations.includes(l.key)).map((l) => l.label);
+          const otherAcks = [pc.acks.fireplaces && "Fireplaces / chimneys", pc.acks.radon && "Radon system"].filter(Boolean);
+          return (
+            <Card className="p-4" id="page-4a">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold tracking-widest" style={{ color: T.textTertiary }}>PAGE 4a — CUSTOMER PREPARATION CHECKLIST</span>
+                <StoryBadge ids={["BWN-130"]} onOpen={onOpenStory} />
+              </div>
+              <p className="text-[9px] mb-2" style={{ color: T.textTertiary }}>{cust.name} · Contract date {fmtDateShort(pc.contractDate)} · {C.version}</p>
+
+              {stayCount > 0 && (
+                <div className="mb-2 p-2 rounded-md" style={{ background: T.warningSoft, border: `1px solid ${T.warning}55` }}>
+                  <p className="text-[10px] font-bold" style={{ color: T.warning }}>{stayCount} item{stayCount !== 1 ? "s" : ""} staying in place — later access + service fee may apply.</p>
+                </div>
+              )}
+
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: T.purpleAccent }}>Items in work area</p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mb-2">
+                {PREP_CHECKLIST_ITEMS.map((it) => {
+                  const m = dispMeta[pc.items[it.key]];
+                  return (
+                    <div key={it.key} className="flex items-center justify-between gap-1">
+                      <span className="text-[9px] truncate" style={{ color: T.text }}>{it.label}</span>
+                      <span className="text-[9px] font-bold flex-shrink-0" style={{ color: m.color }}>{m.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {pc.itemsNotes && <p className="text-[9px] italic mb-2" style={{ color: T.textSecondary }}>Notes: {pc.itemsNotes}</p>}
+
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div><p className="text-[9px] font-bold uppercase" style={{ color: T.purpleAccent }}>Walls</p><p className="text-[9px]" style={{ color: T.text }}>{wall?.label}</p></div>
+                <div><p className="text-[9px] font-bold uppercase" style={{ color: T.purpleAccent }}>Floors</p><p className="text-[9px]" style={{ color: T.text }}>{floor?.label}</p></div>
+                <div><p className="text-[9px] font-bold uppercase" style={{ color: T.purpleAccent }}>Sump location</p><p className="text-[9px]" style={{ color: T.text }}>{locs.length ? locs.join(", ") : "—"}{pc.sumpSpecified ? ` · ${pc.sumpSpecified}` : ""}</p></div>
+                <div><p className="text-[9px] font-bold uppercase" style={{ color: T.purpleAccent }}>Acknowledged</p><p className="text-[9px]" style={{ color: T.text }}>{[pc.acks.dust && "Dust", pc.acks.sumpPower && "Sump power", ...otherAcks].filter(Boolean).join(", ") || "—"}</p></div>
+              </div>
+
+              <p className="text-[9px] leading-snug pt-1.5 mb-2" style={{ color: T.textSecondary, borderTop: `1px solid ${T.borderSoft}` }}>“{C.acknowledgment}”</p>
+              <p className="text-[10px]" style={{ color: T.textTertiary }}>Signature point #3 captured on page 4a.</p>
+            </Card>
+          );
+        })()}
 
         {/* Page 5 — Cancellation */}
         <Card className="p-4" id="page-5">
@@ -3610,10 +4052,11 @@ const QuotePreviewScreen = ({ estimate, onBack, onSign, onOpenStory, orgConfig, 
 const SIG_POINTS_BASE = [
   { idx: 1, page: 2, label: "Scope of Work",            note: "Customer accepts scope, line items, qty",   storyIds: ["BWN-23"] },
   { idx: 2, page: 4, label: "Basement Preparations",    note: "Customer responsibilities + BWN notes",     storyIds: ["BWN-23", "BWN-111"] },
-  { idx: 3, page: 5, label: "Notice of Cancellation",   note: "Buyer copy · state × age cancel-by date",   storyIds: ["BWN-23", "BWN-114"] },
-  { idx: 4, page: 6, label: "Payment Schedule",         note: "Total, deposit, Form of Payment, balance",  storyIds: ["BWN-23", "BWN-117"] },
-  { idx: 5, page: 8, label: "Terms & Conditions",       note: "All 4 warranty blocks + state-conditional", storyIds: ["BWN-23", "BWN-116"] },
-  { idx: 6, page: 9, label: "Pre-Renovation Lead Form", note: "Federal RRP · pre-1978 only",               storyIds: ["BWN-23", "BWN-115"] },
+  { idx: 3, page: 4, label: "Preparation Checklist",    note: "Move/Stay grid, walls, floors, sump, acks", storyIds: ["BWN-23", "BWN-130"] },
+  { idx: 4, page: 5, label: "Notice of Cancellation",   note: "Buyer copy · state × age cancel-by date",   storyIds: ["BWN-23", "BWN-114"] },
+  { idx: 5, page: 6, label: "Payment Schedule",         note: "Total, deposit, Form of Payment, balance",  storyIds: ["BWN-23", "BWN-117"] },
+  { idx: 6, page: 8, label: "Terms & Conditions",       note: "All 4 warranty blocks + state-conditional", storyIds: ["BWN-23", "BWN-116"] },
+  { idx: 7, page: 9, label: "Pre-Renovation Lead Form", note: "Federal RRP · pre-1978 only",               storyIds: ["BWN-23", "BWN-115"] },
 ];
 
 const SignatureCanvas = ({ onChange, height = 180 }) => {
@@ -3678,7 +4121,7 @@ const SignatureScreen = ({ estimate, orgConfig, onBack, onComplete, onOpenStory 
 
   // Filter signature points: drop Lead Form when not pre-1978
   const triggersRrp = estimate.customer.yearBuilt < 1978;
-  const SIG_POINTS = SIG_POINTS_BASE.filter((p) => p.idx !== 6 || triggersRrp);
+  const SIG_POINTS = SIG_POINTS_BASE.filter((p) => p.idx !== 7 || triggersRrp);
   const totalSigs = SIG_POINTS.length;
 
   const cust = estimate.customer;
@@ -3990,7 +4433,7 @@ const PdfReadyScreen = ({ estimate, signMode, onDone, onOpenStory }) => {
 
         <CollapsibleCard
           title="PDF Composition"
-          summary={`10 pages · ${cust.yearBuilt < 1978 ? "RRP Lead Form included" : "Lead Form skipped"}`}
+          summary={`11 pages · ${cust.yearBuilt < 1978 ? "RRP Lead Form included" : "Lead Form skipped"}`}
           right={<StoryBadge ids={["BWN-24"]} onOpen={onOpenStory} />}
           className="mb-3"
         >
@@ -3999,6 +4442,7 @@ const PdfReadyScreen = ({ estimate, signMode, onDone, onOpenStory }) => {
               { p: "1–2", label: "Scope of Work · 5 sections", icon: FileText },
               { p: "3",   label: "Basement Preparations · 11 sub-items", icon: ClipboardList },
               { p: "4",   label: "Basement Prep signatures", icon: PenTool },
+              { p: "4a",  label: "Customer Preparation Checklist · 16 items", icon: ListChecks },
               { p: "5",   label: `Notice of Cancellation · ${rule.days} biz days`, icon: Shield, accent: rule.color },
               { p: "6",   label: "Payment Schedule · " + estimate.formOfPayment, icon: Banknote },
               { p: "7–8", label: "Terms & Conditions · 4 warranty blocks", icon: ScrollText },
@@ -4418,6 +4862,7 @@ const STARTING_ESTIMATE = {
                "logistics", "dustProtection",
                "existingSumpDisposition", "sumpPumpLocation"].includes(it.key),
   })),
+  prepChecklist: makeDefaultPrepChecklist(),
   lineItems: [
     { id: "li-1", sku: "BWN-FLR-001", qty: 64, customDescription: null },
     { id: "li-2", sku: "BWN-SMP-001", qty: 1,  customDescription: null },
@@ -4587,6 +5032,7 @@ export default function App() {
             onRemovePackage={removePackage}
             onOpenMenus={() => setShowMenus(true)}
             onOpenBasement={() => setScene("basement")}
+            onOpenChecklist={() => setScene("checklist")}
             onOpenNotes={() => setScene("notes")}
             onOpenGenerate={() => setShowGenerate(true)}
             onOpenStory={openStory}
@@ -4618,6 +5064,16 @@ export default function App() {
             items={estimate.basementPrep}
             onBack={() => setScene("detail")}
             onSave={(items) => { setEstimate({ ...estimate, basementPrep: items }); setScene("detail"); }}
+            onOpenStory={openStory}
+          />
+        )}
+
+        {scene === "checklist" && (
+          <PrepChecklistScreen
+            value={estimate.prepChecklist || makeDefaultPrepChecklist()}
+            customerName={estimate.customer?.name || "—"}
+            onBack={() => setScene("detail")}
+            onSave={(pc) => { setEstimate({ ...estimate, prepChecklist: pc }); setScene("detail"); }}
             onOpenStory={openStory}
           />
         )}
